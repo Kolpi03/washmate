@@ -183,7 +183,7 @@ vercel --prod
 ```
 
 ## 20. Live application URL
-See the **Deployment status** block at the bottom of this README (updated after the production deployment was verified).
+**https://washmate-mu.vercel.app** (student: `/login`, operator: `/operator/login`). Details in [Deployment status](#deployment-status).
 
 ## 21. Playwright demonstration video
 `demo/washmate-demo.mp4` – silent screen recording (no audio track) of the real app with visible cursor: student login → dashboard → book a wash
@@ -202,3 +202,15 @@ node tests/e2e/demo.spec.js                  # terminal 2: records ~3 min (also 
 ffprobe -v error -show_entries stream=codec_type -of csv=p=0 demo/washmate-demo.mp4   # prints only: video
 ```
 Requires `ffmpeg`/`ffprobe`. Run before 23:30 local server time.
+
+## Deployment status
+| Item | Value |
+|---|---|
+| Vercel account / project | `kalpitasaha03-6566` / `washmate` |
+| Production URL | https://washmate-mu.vercel.app |
+| Database | Neon PostgreSQL (provisioned through the Vercel marketplace, `DATABASE_URL`), all 10 tables created with `manage.py init-db` |
+| Verified on production (11 Nov 2026) | frontend + SPA routes, student register/login, operator login, role checks (403/404/redirects), wash modes, availability, booking, UPI reference submission, duplicate-reference rejection (409), operator verification → `WM-YYYY-NNN`, machine maintenance (capacity drop) & restore, rescheduling request + approval with history, notifications, reports (daily/weekly/monthly + CSV), cron endpoint auth (401 without/with wrong token, 200 with secret), data persisted across serverless invocations, no browser console errors |
+| Not verifiable live | the exact 15-minute reminder timing (production hours were closed at test time) – covered by the backend tests and the local demo |
+| Test data | all smoke-test records were removed from the production database after verification |
+The production operator password was generated randomly and stored only in a git-ignored local file; change it after first login if you wish
+(`python backend/manage.py create-operator --email … ` with `DATABASE_URL` set resets it).
