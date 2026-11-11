@@ -26,7 +26,10 @@ export default function Appointments() {
   const mon = month || (today || '').slice(0, 7)
 
   const params = useMemo(() => {
-    if (view === 'calendar') return { from: `${mon}-01`, to: `${mon}-31` }
+    if (view === 'calendar') {
+      const [yy, mm] = mon.split('-').map(Number)
+      return { from: `${mon}-01`, to: `${mon}-${String(new Date(yy, mm, 0).getDate()).padStart(2, '0')}` }
+    }
     const p = {}
     if (view === 'schedule' || date) p.date = cur
     if (view === 'table' && TABS.find((t) => t[0] === tab)[2]) p.status = TABS.find((t) => t[0] === tab)[2]

@@ -2,16 +2,17 @@
   "name": "washmate",
   "version": "1.0.0",
   "private": true,
-  "description": "WashMate – Smart Hostel Laundry Management System",
+  "description": "WashMate \u2013 Smart Hostel Laundry Management System",
   "scripts": {
     "install:all": "npm --prefix frontend install && npm install",
     "build": "npm --prefix frontend install && npm --prefix frontend run build",
     "dev:frontend": "npm --prefix frontend run dev",
-    "test:frontend": "node --test tests/frontend/",
+    "test:frontend": "node --test tests/frontend/*.test.mjs",
     "demo:serve": "bash demo/serve-demo.sh",
     "demo:record": "node tests/e2e/demo.spec.js"
   },
   "devDependencies": {
     "playwright": "^1.49.1"
-  }
+  },
+  "type": "module"
 }

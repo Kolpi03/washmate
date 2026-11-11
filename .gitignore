@@ -16,3 +16,8 @@ test-results/
 playwright-report/
 demo/raw/
 .tmp/
+.vercel
+.env*
+
+!.env.example
+.tmp-*.log

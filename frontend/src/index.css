@@ -18,6 +18,6 @@
   .btn-sm { @apply px-3 py-1.5 text-xs; }
   .input { @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100; }
   .label { @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500; }
-  .th { @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500; }
-  .td { @apply px-4 py-3 text-sm; }
+  .th { @apply px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500; }
+  .td { @apply px-3 py-3 text-sm; }
 }
