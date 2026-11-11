@@ -45,7 +45,7 @@ def payment_dict(p):
 def reschedule_dict(r, operator=False):
     b = r.booking
     d = {"id": r.id, "booking_id": b.id, "booking_ref": b.booking_reference or f"REQ-{b.id}",
-         "wash_mode": b.wash_mode.name, "original_date": r.original_date.isoformat(),
+         "wash_mode": b.wash_mode.name, "duration_minutes": b.duration_snapshot, "original_date": r.original_date.isoformat(),
          "original_start_time": tm.hhmm(r.original_start_time), "original_end_time": tm.hhmm(r.original_end_time),
          "requested_date": r.requested_date.isoformat(), "requested_start_time": tm.hhmm(r.requested_start_time),
          "requested_end_time": tm.hhmm(r.requested_end_time), "reason": r.reason, "status": r.status,

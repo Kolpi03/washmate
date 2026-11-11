@@ -109,10 +109,15 @@ def edit_machine(user, mid):
 def availability(user):
     sch.expire_reservations()
     d = parse_date(request.args.get("date"), "date")
-    mode = db.session.get(WashMode, request.args.get("wash_mode_id", type=int) or 0)
-    if not mode:
-        raise ApiError("wash_mode_id is required", 400)
-    return jsonify(sch.slots_for(d, mode.duration_minutes))
+    duration = request.args.get("duration", type=int)  # e.g. rescheduling keeps the booking's original duration
+    if not duration:
+        mode = db.session.get(WashMode, request.args.get("wash_mode_id", type=int) or 0)
+        if not mode:
+            raise ApiError("wash_mode_id is required", 400)
+        duration = mode.duration_minutes
+    if duration < 5 or duration > 600:
+        raise ApiError("Invalid duration")
+    return jsonify(sch.slots_for(d, duration))
 
 
 # ---- wash modes -----------------------------------------------------------------------
