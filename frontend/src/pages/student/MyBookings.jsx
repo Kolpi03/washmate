@@ -36,18 +36,17 @@ export default function MyBookings() {
       <PageHeader title="My Bookings" subtitle="Track your appointments, payments and wash progress."
         actions={<Link className="btn-primary" to="/student/book"><CalendarClock className="h-4 w-4" />New booking</Link>} />
       <Tabs value={tab} onChange={setTab} tabs={[['upcoming', 'Upcoming & active', nUp], ['past', 'Previous bookings', all.length - nUp]]} />
-      <Table head={['Reference', 'Date', 'Start', 'Ends', 'Mode', 'Amount', 'Payment', 'Status', 'Machine', 'Arrival', '']}
+      <Table head={['Reference', 'Date', 'Start – expected end', 'Mode', 'Amount', 'Payment', 'Status / arrival', 'Machine', '']}
         empty={rows.length === 0 && <Empty icon={WashingMachine} title="No bookings here yet" hint="Book a wash to see it listed here." action={<Link className="btn-primary" to="/student/book">Book a wash</Link>} />}>
         {rows.map((b) => (
           <tr key={b.id} className="hover:bg-slate-50/60">
             <td className="td font-mono font-semibold">{b.display_ref}</td>
             <td className="td whitespace-nowrap">{dLabel(b.booking_date)}</td>
-            <td className="td">{t12(b.start_time)}</td><td className="td">{t12(b.end_time)}</td>
+            <td className="td whitespace-nowrap">{t12(b.start_time)} – {t12(b.end_time)}</td>
             <td className="td">{b.wash_mode}</td><td className="td">{inr(b.price)}</td>
             <td className="td"><Badge status={b.payment_status} /></td>
-            <td className="td"><Badge status={b.status} /></td>
+            <td className="td"><Badge status={b.status} /><p className="mt-1 whitespace-nowrap text-xs text-slate-400">{b.arrival_time ? `Arrived ${dtLabel(b.arrival_time)}` : 'Not arrived'}</p></td>
             <td className="td">{b.machine_number || '—'}</td>
-            <td className="td whitespace-nowrap">{b.arrival_time ? dtLabel(b.arrival_time) : '—'}</td>
             <td className="td"><button className="btn-secondary btn-sm" onClick={() => setDetail(b)}><Eye className="h-3.5 w-3.5" />Details</button></td>
           </tr>
         ))}
