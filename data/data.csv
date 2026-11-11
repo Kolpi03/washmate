@@ -1,0 +1,1 @@
+observation_id,date,booking_reference,washing_mode,actual_duration_minutes,actual_price,machine_identifier,start_time,end_time,completion_status,water_usage_litres,payment_status,water_basis
