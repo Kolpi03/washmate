@@ -5,6 +5,10 @@ from pathlib import Path
 
 import pytest
 
+_OPS = Path(__file__).resolve().parent / "operators-test.txt"
+_OPS.write_text("op@test.local\n")
+os.environ["OPERATORS_FILE"] = str(_OPS)
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 os.environ.pop("DATABASE_URL", None)
@@ -34,14 +38,37 @@ def clock(monkeypatch):
     return Clock
 
 
+def _test_db_url(tmp_path):
+    """SQLite by default. Set TEST_DATABASE_URL to run the suite on PostgreSQL – only a LOCAL throw-away
+    database is accepted so tests can never touch a real/production database."""
+    url = os.environ.get("TEST_DATABASE_URL", "").strip()
+    if not url:
+        return f"sqlite:///{tmp_path / 'test.db'}"
+    for p in ("postgres://", "postgresql://"):
+        if url.startswith(p):
+            url = "postgresql+psycopg://" + url[len(p):]
+    host = url.split("@")[-1].split("/")[0].split(":")[0]
+    if host not in ("localhost", "127.0.0.1"):
+        pytest.exit(f"Refusing to run tests against non-local database host '{host}'", returncode=2)
+    return url
+
+
 @pytest.fixture
 def app(tmp_path, clock):
-    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'test.db'}",
-                      "SECRET_KEY": "test-secret", "ENABLE_SCHEDULER": False, "CRON_SECRET": "cron-test"})
+    url = _test_db_url(tmp_path)
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": url,
+                      "SECRET_KEY": "test-secret-key-for-unit-tests-0123456789", "ENABLE_SCHEDULER": False,
+                      "CRON_SECRET": "cron-test"})
     with app.app_context():
+        if not url.startswith("sqlite"):
+            db.drop_all()
         init_db(machines=3)
         create_operator("op@test.local", "OperatorPass1")
     yield app
+    if not url.startswith("sqlite"):
+        with app.app_context():
+            db.session.remove()
+            db.drop_all()
 
 
 @pytest.fixture

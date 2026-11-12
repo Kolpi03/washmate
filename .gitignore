@@ -21,3 +21,5 @@ demo/raw/
 
 !.env.example
 .tmp-*.log
+operator-credentials.xlsx
+tests/backend/operators-test.txt

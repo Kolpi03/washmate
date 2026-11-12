@@ -79,3 +79,34 @@ def test_committed_template_is_header_only_and_runs():
     root = Path(__file__).resolve().parents[2]
     rep, issues, df = dr.run(root / "data" / "data.csv")
     assert rep["valid_records"] == len(df)  # no committed synthetic rows are silently accepted
+
+
+# ---------------- audit regressions ----------------
+def test_excel_bom_csv_is_accepted(tmp_path):
+    p = tmp_path / "bom.csv"
+    p.write_bytes(b"\xef\xbb\xbf" + (HEADER + GOOD[0] + "\n").encode())
+    rep, issues, _ = dr.run(p)
+    assert issues == [] and rep["valid_records"] == 1
+
+
+def test_zero_byte_and_ragged_files_exit_cleanly(tmp_path, capsys):
+    empty = tmp_path / "empty.csv"
+    empty.write_bytes(b"")
+    assert dr.main(["--csv", str(empty)]) == 2
+    ragged = tmp_path / "ragged.csv"
+    ragged.write_text(HEADER + "1,2025-01-10,,Normal Wash,44,30,M1,10:00,10:44,COMPLETED,,VERIFIED,,EXTRA,COLUMNS\n")
+    assert dr.main(["--csv", str(ragged)]) in (0, 2)
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_binary_garbage_file_exits_cleanly(tmp_path, capsys):
+    p = tmp_path / "bin.csv"
+    p.write_bytes(bytes(range(256)) * 4)
+    assert dr.main(["--csv", str(p)]) == 2
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_duplicate_observations_with_different_ids_flagged(tmp_path):
+    rows = GOOD[:1] + ["9,2025-01-10,,Normal Wash,44,30,M1,10:00,10:44,COMPLETED,48,VERIFIED,MEASURED"]
+    rep, issues, _ = dr.run(write(tmp_path, rows))
+    assert rep["valid_records"] == 1 and any("duplicate" in m for _, m in issues)

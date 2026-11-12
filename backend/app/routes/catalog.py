@@ -8,7 +8,7 @@ from app.services import settings as S
 from app.services.notifications import notify_operators
 from app.utils import common as tm
 from app.utils.auth import audit, login_required, operator_required
-from app.utils.common import ApiError, parse_date
+from app.utils.common import ApiError, json_body, parse_date
 
 bp = Blueprint("catalog", __name__, url_prefix="/api")
 
@@ -51,7 +51,7 @@ def list_machines(user):
 @bp.post("/machines")
 @operator_required
 def add_machine(user):
-    d = request.get_json(silent=True) or {}
+    d = json_body()
     num = str(d.get("machine_number", "")).strip()
     if not num or len(num) > 20:
         raise ApiError("Machine number is required (max 20 characters)")
@@ -71,7 +71,7 @@ def edit_machine(user, mid):
     m = db.session.get(Machine, mid)
     if not m:
         raise ApiError("Machine not found", 404)
-    d = request.get_json(silent=True) or {}
+    d = json_body()
     old = m.status
     if "machine_number" in d:
         num = str(d["machine_number"]).strip()
@@ -155,7 +155,7 @@ def _mode_fields(d, m, partial):
 @operator_required
 def create_mode(user):
     m = WashMode()
-    _mode_fields(request.get_json(silent=True) or {}, m, False)
+    _mode_fields(json_body(), m, False)
     db.session.add(m)
     db.session.flush()
     audit(user, "MODE_CREATED", "wash_mode", m.id, m.name)
@@ -169,7 +169,7 @@ def edit_mode(user, mid):
     m = db.session.get(WashMode, mid)
     if not m:
         raise ApiError("Wash mode not found", 404)
-    _mode_fields(request.get_json(silent=True) or {}, m, True)  # bookings keep their own snapshots
+    _mode_fields(json_body(), m, True)  # bookings keep their own snapshots
     audit(user, "MODE_UPDATED", "wash_mode", m.id, m.name)
     db.session.commit()
     return jsonify({"wash_mode": m.to_dict()})
@@ -203,7 +203,7 @@ def get_settings(user):
 @bp.patch("/settings")
 @operator_required
 def patch_settings(user):
-    S.update_settings(request.get_json(silent=True) or {})
-    audit(user, "SETTINGS_UPDATED", "settings", None, ",".join((request.get_json(silent=True) or {}).keys()))
+    S.update_settings(json_body())
+    audit(user, "SETTINGS_UPDATED", "settings", None, ",".join((json_body()).keys()))
     db.session.commit()
     return jsonify({"settings": S.all_settings()})

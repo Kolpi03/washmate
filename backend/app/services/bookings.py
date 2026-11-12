@@ -1,4 +1,5 @@
 """Booking lifecycle: create, pay, verify, arrive, wash, cancel, reschedule."""
+import re
 from datetime import timedelta
 
 from sqlalchemy.exc import IntegrityError
@@ -54,9 +55,10 @@ def create_booking(student, wash_mode_id, date_, start_time):
 
 
 def submit_payment(student, booking_id, txn_ref):
-    ref = (txn_ref or "").strip().upper()
-    if len(ref) < 6 or len(ref) > 40 or not ref.replace("-", "").isalnum():
-        raise ApiError("Enter the UPI transaction reference (6-40 letters/digits)")
+    raw = str(txn_ref or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9-]{6,40}", raw):  # ASCII only: blocks look-alike Unicode digits/letters
+        raise ApiError("Enter the UPI transaction reference (6-40 letters, digits or hyphens)")
+    ref = raw.upper()
     sch.expire_reservations()
     b = db.session.get(Booking, booking_id)
     if not b or b.student_id != student.id:
@@ -92,6 +94,9 @@ def verify_payment(op, payment_id):
         if p.status == "VERIFIED":
             return b
         now = tm.now_local()
+        if now >= tm.combine(b.booking_date, b.end_time):
+            raise ApiError("The appointment time has already passed, so this booking cannot be confirmed. "
+                           "Reject it with a reason (and refund the student outside WashMate).", 409)
         p.status, p.verified_by, p.verified_at = "VERIFIED", op.id, now
         b.payment_status, b.status, b.confirmed_at = "VERIFIED", "CONFIRMED", now
         b.booking_reference = _next_reference(b.booking_date.year)  # serialised by booking_lock
@@ -136,6 +141,9 @@ def cancel_booking(user, b: Booking, reason, refund=False):
     if not is_op:
         if b.status in ("ARRIVED", "WASHING"):
             raise ApiError("Please ask the operator to cancel a wash that has started", 403)
+        if b.status == "PAYMENT_SUBMITTED":
+            raise ApiError("Your payment is awaiting the operator's verification. "
+                           "Please wait for the decision or ask the operator to cancel.", 409)
         cutoff = tm.combine(b.booking_date, b.start_time) - timedelta(minutes=S.get_int("student_cancel_cutoff_minutes"))
         if b.status == "CONFIRMED" and tm.now_local() > cutoff:
             raise ApiError(f"Cancellation closes {S.get_int('student_cancel_cutoff_minutes')} minutes before the appointment", 409)

@@ -13,10 +13,13 @@ export default function OperatorBookingModal({ bookingId, onClose, onChanged }) 
   const [machineId, setMachineId] = useState('')
   const [dlg, setDlg] = useState(null) // 'reject' | 'cancel'
   const [refund, setRefund] = useState(false)
+  const [busy, setBusy] = useState(false)
   const b = bookingId ? data?.booking : null
 
   const run = async (fn, ok) => {
-    try { await fn(); toast.success(ok); reload(); onChanged?.() } catch (e) { toast.error(errMsg(e)) }
+    if (busy) return // ignore double clicks while a request is in flight
+    setBusy(true)
+    try { await fn(); toast.success(ok); reload(); onChanged?.() } catch (e) { toast.error(errMsg(e)) } finally { setBusy(false) }
   }
   const free = (machines.data?.machines || []).filter((m) => m.status === 'AVAILABLE')
   const mid = machineId || b?.machine_id || ''
@@ -46,6 +49,7 @@ export default function OperatorBookingModal({ bookingId, onClose, onChanged }) 
             {b.status === 'WASHING' && <div><p className="mb-1 text-sm font-medium">Progress {b.progress ?? 0}%</p><ProgressBar value={b.progress ?? 0} /></div>}
             {b.cancel_reason && <p className="rounded-xl bg-slate-50 p-3 text-sm">Cancel note: {b.cancel_reason}</p>}
 
+            <fieldset disabled={busy} className="m-0 min-w-0 space-y-5 border-0 p-0">
             {['CONFIRMED', 'ARRIVED'].includes(b.status) && (
               <div className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-100 p-3">
                 <div className="min-w-[180px] flex-1"><span className="label">Machine</span>
@@ -69,6 +73,7 @@ export default function OperatorBookingModal({ bookingId, onClose, onChanged }) 
               {['RESERVED', 'PAYMENT_SUBMITTED', 'CONFIRMED', 'ARRIVED', 'WASHING'].includes(b.status) && <button className="btn-secondary !text-red-600" onClick={() => setDlg('cancel')}><Ban className="h-4 w-4" />Cancel with reason</button>}
               {b.status === 'CONFIRMED' && <button className="btn-ghost" onClick={() => run(() => api.post(`/bookings/${b.id}/propose-reschedule`, { message: 'The operator asks you to pick a new time.' }), 'Student asked to reschedule')}>Ask to reschedule</button>}
             </div>
+            </fieldset>
             <p className="text-xs text-slate-400">No-show can only be marked after the grace period following the start time. Every action is recorded in the audit log.</p>
           </div>
         )}

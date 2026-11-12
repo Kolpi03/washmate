@@ -13,13 +13,13 @@ from app.services.notifications import process_due_reminders
 from app.services.serializers import booking_dict, payment_dict, reschedule_dict
 from app.utils import common as tm
 from app.utils.auth import login_required, operator_required, student_required
-from app.utils.common import ApiError, parse_date, parse_time
+from app.utils.common import ApiError, json_body, parse_date, parse_time
 
 bp = Blueprint("ops", __name__, url_prefix="/api")
 
 
 def _body():
-    return request.get_json(silent=True) or {}
+    return json_body()
 
 
 def _own_or_operator(user, bid) -> Booking:
@@ -195,7 +195,11 @@ def pay_refund(user, pid):
 @student_required
 def resched_create(user):
     d = _body()
-    b = db.session.get(Booking, int(d.get("booking_id") or 0))
+    try:
+        bid = int(d.get("booking_id"))
+    except (TypeError, ValueError):
+        raise ApiError("booking_id is required")
+    b = db.session.get(Booking, bid)
     if not b or b.student_id != user.id:
         raise ApiError("Booking not found", 404)
     r = svc.request_reschedule(user, b, parse_date(d.get("requested_date"), "requested_date"),
@@ -259,7 +263,7 @@ def notif_read_all(user):
 # ---- reports --------------------------------------------------------------------------
 def _csv_or_json(r):
     if request.args.get("format") == "csv":
-        return Response(rep.report_csv(r), mimetype="text/csv",
+        return Response(rep.report_csv(r).encode("utf-8"), content_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": f"attachment; filename=washmate-{r['label']}-{r['start']}.csv"})
     return jsonify({"report": r})
 
@@ -303,7 +307,7 @@ def monthly(user):
 def cron_reminders():
     secret = current_app.config.get("CRON_SECRET")
     token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-    if not secret or not hmac.compare_digest(token, secret):
+    if not secret or not hmac.compare_digest(token.encode("utf-8"), secret.encode("utf-8")):
         raise ApiError("Unauthorized", 401)
     expired = sch.expire_reservations()
     return jsonify({"reminders_sent": process_due_reminders(), "reservations_expired": expired})

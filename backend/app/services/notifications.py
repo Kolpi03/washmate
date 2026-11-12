@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from app.extensions import db
 from app.models import Booking, Notification, User
 from app.services import settings as S
@@ -24,9 +26,8 @@ def process_due_reminders():
     Safe to call from cron, from a scheduler thread, and lazily on API reads."""
     now = tm.now_local()
     lead = S.get_int("reminder_minutes_before")
-    from datetime import timedelta
     q = (Booking.query.filter(Booking.status == "CONFIRMED", Booking.reminder_sent_at.is_(None),
-                              Booking.booking_date == now.date()))
+                              Booking.booking_date.in_([now.date(), now.date() + timedelta(days=1)])))
     sent = 0
     for b in q.with_for_update(skip_locked=True).all() if db.engine.dialect.name == "postgresql" else q.all():
         start = tm.combine(b.booking_date, b.start_time)

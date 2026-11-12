@@ -11,6 +11,8 @@ export SECRET_KEY="demo-only-secret-key-not-for-production-0123456789"
 export CRON_SECRET="demo-cron-secret"
 export UPI_ID="demo.hostel@testupi"        # fake test UPI ID – no real payments happen
 export FLASK_ENV=development
+echo "operator@washmate.test" > .tmp/demo-operators.txt
+export OPERATORS_FILE="$ROOT/.tmp/demo-operators.txt"   # demo-only allowlist
 export OPERATOR_PASSWORD="${DEMO_OPERATOR_PASSWORD:-DemoOperator#2026}"
 "$PY" backend/manage.py create-operator --email operator@washmate.test --name "Demo Operator"
 "$PY" backend/manage.py seed-demo

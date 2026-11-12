@@ -14,16 +14,19 @@ export default function Machines() {
   const [maint, setMaint] = useState(null)
   const [num, setNum] = useState('')
   const [busy, setBusy] = useState(false)
+  const [acting, setActing] = useState(false)
   if (loading) return <Spinner />
   const ms = data.machines
 
   const patch = async (m, body, ok) => {
+    if (acting) return
+    setActing(true)
     try {
       const r = await api.patch(`/machines/${m.id}`, body)
       toast.success(ok || `Machine ${m.machine_number} updated`)
       if (r.data.at_risk_booking_ids?.length) toast.error(`${r.data.at_risk_booking_ids.length} booking(s) may be affected – review below`)
       reload(); risk.reload()
-    } catch (e) { toast.error(errMsg(e)) }
+    } catch (e) { toast.error(errMsg(e)) } finally { setActing(false) }
   }
   const create = async (e) => {
     e.preventDefault(); setBusy(true)
@@ -54,7 +57,7 @@ export default function Machines() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {ms.map((m) => (
-          <article key={m.id} className={`card p-5 ${['MAINTENANCE', 'INACTIVE'].includes(m.status) ? 'border-red-100 bg-red-50/30' : ''}`} data-testid={`machine-${m.machine_number}`}>
+          <fieldset key={m.id} disabled={acting} className={`card m-0 min-w-0 p-5 ${['MAINTENANCE', 'INACTIVE'].includes(m.status) ? 'border-red-100 bg-red-50/30' : ''}`} data-testid={`machine-${m.machine_number}`}>
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3"><div className={`rounded-xl p-2.5 ${m.status === 'AVAILABLE' ? 'bg-emerald-50 text-emerald-600' : m.status === 'OCCUPIED' ? 'bg-indigo-50 text-indigo-600' : 'bg-red-50 text-red-600'}`}><WashingMachine className="h-6 w-6" /></div>
                 <div><p className="text-lg font-bold">Machine {m.machine_number}</p><p className="text-xs text-slate-400">{m.assignments_today} appointment(s) today</p></div></div>
@@ -73,7 +76,7 @@ export default function Machines() {
                   <button className="btn-secondary btn-sm" onClick={() => patch(m, { status: 'INACTIVE' })} disabled={!!m.current_booking}><Power className="h-3.5 w-3.5" />Disable</button></>}
               <button className="btn-ghost btn-sm" onClick={() => setEdit({ ...m })}><Settings2 className="h-3.5 w-3.5" />Edit</button>
             </div>
-          </article>))}
+          </fieldset>))}
       </div>
 
       <Modal open={add} onClose={() => setAdd(false)} title="Add machine">

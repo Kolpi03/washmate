@@ -42,23 +42,30 @@ def occupancy(b: Booking):
 
 
 def expire_reservations():
-    """Release capacity held by unpaid reservations whose hold window has passed."""
+    """Release capacity held by unpaid reservations whose hold window has passed.
+    Each row is flipped with a conditional UPDATE so concurrent callers notify exactly once."""
+    from app.services.notifications import notify
     now = tm.now_local()
     rows = Booking.query.filter(Booking.status == "RESERVED", Booking.expires_at.isnot(None),
                                 Booking.expires_at <= now).all()
+    done = 0
     for b in rows:
-        b.status = "EXPIRED"
-    if rows:
-        from app.services.notifications import notify
-        for b in rows:
+        changed = (Booking.query.filter(Booking.id == b.id, Booking.status == "RESERVED")
+                   .update({"status": "EXPIRED"}, synchronize_session=False))
+        if changed:
+            done += 1
             notify(b.student_id, "Reservation expired",
                    "Your unpaid reservation expired and the slot was released.", "EXPIRED", b.id)
+    if rows:
         db.session.commit()
-    return len(rows)
+    return done
 
 
 def _active_on(date_, exclude_id=None):
-    q = Booking.query.filter(Booking.booking_date == date_, Booking.status.in_(ACTIVE_BOOKING))
+    """Active bookings that can occupy a machine on `date_`: that day's, plus the previous day's
+    (a late wash + turnaround buffer can run past midnight)."""
+    q = Booking.query.filter(Booking.booking_date.in_([date_ - timedelta(days=1), date_]),
+                             Booking.status.in_(ACTIVE_BOOKING))
     if exclude_id:
         q = q.filter(Booking.id != exclude_id)
     now = tm.now_local()
@@ -136,7 +143,8 @@ def at_risk_bookings():
             ivs = [occupancy(x) for x in admitted]
             peak = max(sum(1 for a, z in ivs if a <= p < z) for p in points)
             if peak >= working:
-                risky.append(b)
+                if b.booking_date == d:  # previous-day bookings are judged on their own date
+                    risky.append(b)
             else:
                 admitted.append(b)
     return risky
