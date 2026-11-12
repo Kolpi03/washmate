@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import cors, db, jwt
 from app.utils.common import ApiError
-from config import IS_PROD, Config, database_url, load_operator_emails
+from config import IS_PROD, Config, database_url
 
 log = logging.getLogger("washmate")
 
@@ -16,7 +16,6 @@ def create_app(overrides=None):
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url()
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = Config.engine_options(app.config["SQLALCHEMY_DATABASE_URI"])
     app.config["IS_PROD"] = IS_PROD
-    app.config["OPERATOR_EMAILS"] = load_operator_emails()
     if overrides:
         app.config.update(overrides)
         if "SQLALCHEMY_DATABASE_URI" in overrides:

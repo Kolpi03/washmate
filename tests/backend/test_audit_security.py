@@ -5,7 +5,7 @@ from conftest import DAY, book, confirmed, make_student, mode_id
 
 
 # ---------- authorization sweep: every /api route is protected unless explicitly public ----------
-PUBLIC = {"auth.register", "auth.login", "auth.logout", "ops.cron_reminders", "ops.health"}
+PUBLIC = {"auth.register", "auth.login", "auth.logout", "auth.set_password_with_token", "ops.cron_reminders", "ops.health"}
 STUDENT_OK = {"auth.me", "auth.update_me", "catalog.availability", "catalog.list_modes", "catalog.get_settings",
               "ops.create_booking", "ops.my_bookings", "ops.get_booking", "ops.cancel", "ops.pay_submit",
               "ops.resched_create", "ops.resched_list", "ops.notifications", "ops.notif_read", "ops.notif_read_all"}
@@ -167,11 +167,19 @@ def test_error_responses_do_not_leak_internals(client):
     assert mode_id
 
 
-def test_operator_must_be_on_allowlist(app):
+def test_operator_invite_link_sets_password_once(app):
+    from app.extensions import db
+    from app.models import User
+    from app.routes.auth import make_setpw_token
+    with app.app_context():
+        u = User(email="new.op@test.local", name="New Op", role="OPERATOR", hostel="Laundry")
+        u.set_password("random-unusable-string")
+        db.session.add(u); db.session.commit()
+        tok = make_setpw_token(u)
     c = app.test_client()
-    ok = c.post("/api/auth/login", json={"email": "op@test.local", "password": "OperatorPass1", "portal": "OPERATOR"})
-    assert ok.status_code == 200
-    app.config["OPERATOR_EMAILS"] = set()  # owner removed the email from backend/operators.txt
-    assert c.get("/api/auth/me").status_code == 403
-    r = app.test_client().post("/api/auth/login", json={"email": "op@test.local", "password": "OperatorPass1", "portal": "OPERATOR"})
-    assert r.status_code == 401
+    assert c.post("/api/auth/set-password", json={"token": "junk", "password": "GoodPassw0rd!"}).status_code == 400
+    assert c.post("/api/auth/set-password", json={"token": tok, "password": "short"}).status_code == 400
+    assert c.post("/api/auth/set-password", json={"token": tok, "password": "GoodPassw0rd!"}).status_code == 200
+    assert c.post("/api/auth/set-password", json={"token": tok, "password": "AnotherPassw0rd!"}).status_code == 400  # single use
+    r = c.post("/api/auth/login", json={"email": "new.op@test.local", "password": "GoodPassw0rd!", "portal": "OPERATOR"})
+    assert r.status_code == 200
