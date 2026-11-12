@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import create_app  # noqa: E402
 from app.extensions import db  # noqa: E402
+from config import load_operator_emails  # noqa: E402
 from app.models import Machine, User, WashMode  # noqa: E402
 
 # Clearly ILLUSTRATIVE starting values – the operator edits these in the portal.
@@ -36,6 +37,8 @@ def init_db(machines=6):
 
 
 def create_operator(email, password, name="Hostel Operator"):
+    if email.lower() not in load_operator_emails():
+        sys.exit(f"{email} is not in backend/operators.txt - only the app owner can authorise operators by adding the email there.")
     u = User.query.filter_by(email=email.lower()).first()
     if u and u.role != "OPERATOR":
         sys.exit("That email belongs to a student account.")

@@ -41,7 +41,7 @@ export default function Register() {
             <Field label="Email"><input className="input" type="email" required value={f.email} onChange={set('email')} autoComplete="email" /></Field>
             <Field label="Hostel / room"><input className="input" required value={f.hostel} onChange={set('hostel')} /></Field>
           </div>
-          <Field label="Password" hint="At least 8 characters"><input className="input" type="password" required minLength={8} value={f.password} onChange={set('password')} autoComplete="new-password" /></Field>
+          <Field label="Password" hint="At least 8 characters"><input className="input" type="password" required minLength={8} maxLength={128} value={f.password} onChange={set('password')} autoComplete="new-password" /></Field>
           <button className="btn-primary w-full" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />} Create account</button>
           <p className="text-center text-sm text-slate-500">Already registered? <Link className="font-semibold text-brand-600" to="/login">Sign in</Link></p>
         </form>

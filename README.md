@@ -105,6 +105,7 @@ npm --prefix frontend run build       # production build -> frontend/dist
 Public operator registration does not exist. Create the first operator from the terminal:
 ```bash
 source .venv/bin/activate
+# the email must first be listed in backend/operators.txt (owner-only allowlist)
 python backend/manage.py create-operator --email operator@yourhostel.example    # prompts for the password
 # or non-interactive: OPERATOR_PASSWORD='…' python backend/manage.py create-operator --email …
 ```

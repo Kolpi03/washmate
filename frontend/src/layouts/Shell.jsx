@@ -23,6 +23,7 @@ const OPERATOR_NAV = [
   ['/operator/modes', 'Wash Modes', Droplets],
   ['/operator/reschedules', 'Rescheduling', Repeat],
   ['/operator/reports', 'Reports', BarChart3],
+  ['/operator/notifications', 'Notifications', Bell],
   ['/operator/settings', 'Settings', Settings],
 ]
 
@@ -90,7 +91,7 @@ export default function Shell({ role }) {
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
         <button className="btn-ghost btn-sm" onClick={() => setOpen(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
         <span className="font-bold">WashMate</span>
-        <NavLink to={isOp ? '/operator' : '/student/notifications'} className="relative p-2" aria-label="Notifications">
+        <NavLink to={isOp ? '/operator/notifications' : '/student/notifications'} className="relative p-2" aria-label="Notifications">
           <Bell className="h-5 w-5" />{unread > 0 && <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-red-500" />}
         </NavLink>
       </header>

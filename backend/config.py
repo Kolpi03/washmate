@@ -21,6 +21,16 @@ def database_url() -> str:
     return url
 
 
+def load_operator_emails(path=None):
+    """Emails allowed to be operators, read from backend/operators.txt (owner-edited; '#' starts a comment)."""
+    path = Path(path or os.environ.get("OPERATORS_FILE") or BASE_DIR / "operators.txt")
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return set()  # missing file => nobody is an operator (fail closed)
+    return {l.split("#")[0].strip().lower() for l in lines if l.split("#")[0].strip()}
+
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY") or ("dev-secret-change-me" if not IS_PROD else None)
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or SECRET_KEY

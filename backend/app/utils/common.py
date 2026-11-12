@@ -2,7 +2,7 @@
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from flask import current_app
+from flask import current_app, request
 
 
 class ApiError(Exception):
@@ -49,3 +49,25 @@ def add_minutes(d: date, t: time, minutes: int) -> datetime:
 
 def iso(dt):
     return dt.isoformat() if dt else None
+
+
+def _has_nul(v):
+    if isinstance(v, str):
+        return "\x00" in v
+    if isinstance(v, dict):
+        return any(_has_nul(k) or _has_nul(x) for k, x in v.items())
+    if isinstance(v, list):
+        return any(_has_nul(x) for x in v)
+    return False
+
+
+def json_body() -> dict:
+    """The request body as a dict. Missing body -> {}; non-object JSON or NUL characters -> 400 (never a 500)."""
+    data = request.get_json(silent=True)
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ApiError("Request body must be a JSON object")
+    if _has_nul(data):
+        raise ApiError("Invalid characters in request")
+    return data

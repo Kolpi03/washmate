@@ -9,7 +9,7 @@ import StudentDashboard from './pages/student/Dashboard'
 import BookWash from './pages/student/BookWash'
 import Payment from './pages/student/Payment'
 import MyBookings from './pages/student/MyBookings'
-import Notifications from './pages/student/Notifications'
+import Notifications from './pages/student/Notifications'  // shared by both portals
 import Profile from './pages/student/Profile'
 import Overview from './pages/operator/Overview'
 import Appointments from './pages/operator/Appointments'
@@ -60,6 +60,7 @@ export default function App() {
         <Route path="modes" element={<WashModes />} />
         <Route path="reschedules" element={<Reschedules />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

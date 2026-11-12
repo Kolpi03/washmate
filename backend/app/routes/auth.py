@@ -1,15 +1,32 @@
 import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import create_access_token, set_access_cookies, unset_jwt_cookies
 
 from app.extensions import db
 from app.models import User
 from app.utils.auth import audit, login_required
-from app.utils.common import ApiError
+from app.utils.common import ApiError, json_body
+from app.utils import security
+from werkzeug.security import check_password_hash, generate_password_hash
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+_DUMMY_HASH = generate_password_hash("not-a-real-password")  # equalises timing for unknown accounts
+
+
+def check_password_policy(pw, *identifiers):
+    if len(pw) < 8:
+        raise ApiError("Password must be at least 8 characters")
+    if len(pw) > 128:
+        raise ApiError("Password must be at most 128 characters")
+    if pw.isdigit() or len(set(pw)) == 1:
+        raise ApiError("Choose a less guessable password (not only digits or one repeated character)")
+    low = pw.lower()
+    if any(i and low == i.lower() for i in identifiers):
+        raise ApiError("Password must not be the same as your email, roll number or name")
 
 
 def _clean(data, key, maxlen, required=True):
@@ -23,14 +40,14 @@ def _clean(data, key, maxlen, required=True):
 
 @bp.post("/register")
 def register():
-    d = request.get_json(silent=True) or {}
+    d = json_body()
     name, roll = _clean(d, "name", 120), _clean(d, "roll_number", 40).upper()
     email, hostel = _clean(d, "email", 160).lower(), _clean(d, "hostel", 80)
     pw = str(d.get("password", ""))
     if not EMAIL.match(email):
         raise ApiError("Enter a valid email address")
-    if len(pw) < 8:
-        raise ApiError("Password must be at least 8 characters")
+    check_password_policy(pw, email, roll, name)
+    security.check_registration_allowed()
     if User.query.filter_by(email=email).first():
         raise ApiError("An account with this email already exists", 409)
     if User.query.filter_by(roll_number=roll).first():
@@ -39,7 +56,7 @@ def register():
     u.set_password(pw)
     db.session.add(u)
     db.session.flush()
-    audit(u, "STUDENT_REGISTERED", "user", u.id)
+    audit(u, "STUDENT_REGISTERED", "user", u.id, f"ip:{security.client_ip()}")
     db.session.commit()
     resp = jsonify({"user": u.to_dict()})
     set_access_cookies(resp, create_access_token(identity=str(u.id)))
@@ -48,14 +65,24 @@ def register():
 
 @bp.post("/login")
 def login():
-    d = request.get_json(silent=True) or {}
+    d = json_body()
     ident = str(d.get("email", "")).strip().lower()
     portal = str(d.get("portal", "")).upper()
+    security.check_login_allowed(ident)
     u = User.query.filter_by(email=ident).first() or User.query.filter_by(roll_number=ident.upper()).first()
-    if not u or not u.check_password(str(d.get("password", ""))):
+    pw = str(d.get("password", ""))
+    if u:
+        good = u.check_password(pw)
+    else:
+        check_password_hash(_DUMMY_HASH, pw)
+        good = False
+    if not good:
+        security.record_login_failure(ident)
         raise ApiError("Invalid credentials", 401)
     if portal in ("STUDENT", "OPERATOR") and u.role != portal:
         raise ApiError("Invalid credentials for this portal", 401)
+    if u.role == "OPERATOR" and u.email.lower() not in current_app.config.get("OPERATOR_EMAILS", set()):
+        raise ApiError("Invalid credentials", 401)  # operator removed from backend/operators.txt
     resp = jsonify({"user": u.to_dict()})
     set_access_cookies(resp, create_access_token(identity=str(u.id)))
     return resp
@@ -77,7 +104,7 @@ def me(user):
 @bp.patch("/me")
 @login_required
 def update_me(user):
-    d = request.get_json(silent=True) or {}
+    d = json_body()
     if "name" in d:
         user.name = _clean(d, "name", 120)
     if "hostel" in d:

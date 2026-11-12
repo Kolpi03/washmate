@@ -1,0 +1,12 @@
+# WashMate operator allowlist  (edited ONLY by the app/repository owner)
+#
+# One email per line. Only the emails listed here can hold the OPERATOR role:
+#   * `manage.py create-operator` refuses any email that is not listed here.
+#   * A listed-then-removed operator is locked out of every operator page/API on the next deploy.
+# Students cannot become operators by registering - registration always creates STUDENT accounts.
+#
+# To add an operator:  1) add their email below  2) commit + redeploy
+#                      3) run: OPERATOR_PASSWORD='...' python backend/manage.py create-operator --email <email>
+# Passwords are never stored in this file.
+
+kalpitasaha03@gmail.com

@@ -16,7 +16,8 @@ def build_report(start: date, end: date, label: str):
     bs = _rows(start, end)
     counts = Counter(b.status for b in bs)
     done = [b for b in bs if b.status == "COMPLETED"]
-    paid = [b for b in bs if b.payment_status == "VERIFIED" and b.status in ("CONFIRMED", "ARRIVED", "WASHING", "COMPLETED", "NO_SHOW")]
+    # revenue = payments the operator verified and has not refunded (REJECTED/REFUNDED/PENDING never count)
+    paid = [b for b in bs if b.payment_status == "VERIFIED"]
     revenue = sum(b.price_snapshot for b in paid)
     modes = Counter(b.wash_mode.name for b in bs if b.status not in ("EXPIRED", "REJECTED"))
     by_hour = Counter(b.start_time.hour for b in bs if b.status not in ("EXPIRED", "REJECTED", "CANCELLED"))
@@ -53,9 +54,24 @@ def build_report(start: date, end: date, label: str):
     }
 
 
+def _safe(v):
+    """Neutralise spreadsheet formula injection (cells starting with = + - @ are prefixed with an apostrophe)."""
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + v
+    return v
+
+
+class _SafeWriter:
+    def __init__(self, w):
+        self.w = w
+
+    def writerow(self, row):
+        self.w.writerow([_safe(c) for c in row])
+
+
 def report_csv(rep):
     out = io.StringIO()
-    w = csv.writer(out)
+    w = _SafeWriter(csv.writer(out))
     w.writerow(["WashMate report", rep["label"], rep["start"], rep["end"]])
     for k in ("total_bookings", "completed", "cancelled", "no_shows", "revenue", "popular_mode",
               "estimated_water_litres", "machine_utilization_pct"):
@@ -72,7 +88,7 @@ def report_csv(rep):
     w.writerow(["wash_mode", "bookings"])
     for m in rep["mode_counts"]:
         w.writerow([m["name"], m["count"]])
-    return out.getvalue()
+    return "\ufeff" + out.getvalue()  # BOM so Excel opens UTF-8 correctly
 
 
 def overview(today: date):
@@ -91,7 +107,6 @@ def overview(today: date):
         "washing": c.get("WASHING", 0), "completed": c.get("COMPLETED", 0), "no_shows": c.get("NO_SHOW", 0),
         "machines": {"available": ms.get("AVAILABLE", 0), "occupied": ms.get("OCCUPIED", 0),
                      "maintenance": ms.get("MAINTENANCE", 0), "inactive": ms.get("INACTIVE", 0)},
-        "revenue_today": float(sum(b.price_snapshot for b in bs if b.payment_status == "VERIFIED"
-                                   and b.status in ("CONFIRMED", "ARRIVED", "WASHING", "COMPLETED", "NO_SHOW"))),
+        "revenue_today": float(sum(b.price_snapshot for b in bs if b.payment_status == "VERIFIED")),
         "upcoming_ids": [b.id for b in upcoming[:8]],
     }

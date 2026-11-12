@@ -1,3 +1,5 @@
+import re
+
 from flask import current_app, g
 
 from app.extensions import db
@@ -52,6 +54,12 @@ def get_time(key):
     return parse_time(all_settings()[key], key)
 
 
+LIMITS = {"slot_interval_minutes": (1, 240), "turnaround_buffer_minutes": (0, 240), "grace_period_minutes": (0, 240),
+          "reservation_hold_minutes": (1, 240), "reminder_minutes_before": (1, 1440),
+          "student_cancel_cutoff_minutes": (0, 1440), "max_advance_days": (1, 60)}
+UPI_RE = re.compile(r"^[A-Za-z0-9._-]{2,64}@[A-Za-z][A-Za-z0-9.-]{1,40}$")
+
+
 def update_settings(data: dict):
     for key, raw in data.items():
         if key not in DEFAULTS:
@@ -63,11 +71,19 @@ def update_settings(data: dict):
                 n = int(val)
             except ValueError:
                 raise ApiError(f"{key} must be a whole number")
-            if n < 0 or (key in ("slot_interval_minutes", "max_advance_days") and n < 1):
-                raise ApiError(f"{key} is out of range")
+            lo, hi = LIMITS.get(key, (0, 100000))
+            if not lo <= n <= hi:
+                raise ApiError(f"{key} must be between {lo} and {hi}")
             val = str(n)
         elif typ == "time":
             val = parse_time(val, key).strftime("%H:%M")
+        else:
+            if len(val) > 500:
+                raise ApiError(f"{key} is too long")
+            if key == "upi_id" and val and not UPI_RE.match(val):
+                raise ApiError("UPI ID must look like name@bank")
+            if key == "upi_qr_code_url" and val and not re.match(r"^https?://[^\s]+$", val, re.I):
+                raise ApiError("QR code URL must start with http:// or https://")
         row = SystemSetting.query.filter_by(setting_key=key).first()
         if row:
             row.setting_value = val

@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import cors, db, jwt
 from app.utils.common import ApiError
-from config import Config, database_url
+from config import IS_PROD, Config, database_url, load_operator_emails
 
 log = logging.getLogger("washmate")
 
@@ -15,6 +15,8 @@ def create_app(overrides=None):
     app.config.from_object(Config)
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url()
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = Config.engine_options(app.config["SQLALCHEMY_DATABASE_URI"])
+    app.config["IS_PROD"] = IS_PROD
+    app.config["OPERATOR_EMAILS"] = load_operator_emails()
     if overrides:
         app.config.update(overrides)
         if "SQLALCHEMY_DATABASE_URI" in overrides:
@@ -25,17 +27,31 @@ def create_app(overrides=None):
 
     db.init_app(app)
     jwt.init_app(app)
-    origins = [o for o in {app.config["FRONTEND_URL"], "http://localhost:5173", "http://127.0.0.1:5173"} if o]
+    origins = {app.config["FRONTEND_URL"].rstrip("/")}
+    if not app.config["IS_PROD"]:
+        origins |= {"http://localhost:5173", "http://127.0.0.1:5173"}
+    origins = [o for o in origins if o]
     cors.init_app(app, resources={r"/api/*": {"origins": origins}}, supports_credentials=True)
 
     from app.routes import auth, catalog, operations
     for m in (auth, catalog, operations):
         app.register_blueprint(m.bp)
 
+    from app.utils.security import enforce_same_site_requests
+
+    @app.before_request
+    def _csrf_guard():
+        if request.path.startswith("/api/"):
+            enforce_same_site_requests()
+
     @app.errorhandler(ApiError)
     def api_error(e):
         db.session.rollback()
-        return jsonify({"error": e.message, **e.extra}), e.status
+        extra = dict(e.extra)
+        resp = jsonify({"error": e.message, **extra})
+        if "retry_after" in extra:
+            resp.headers["Retry-After"] = str(extra["retry_after"])
+        return resp, e.status
 
     @app.errorhandler(IntegrityError)
     def integrity(e):

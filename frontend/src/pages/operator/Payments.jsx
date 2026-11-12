@@ -12,11 +12,16 @@ export default function Payments() {
   const all = useGet('/payments', { params: tab === 'PENDING' ? undefined : { status: tab === 'ALL' ? undefined : tab }, enabled: tab !== 'PENDING', poll: 20000 })
   const [rej, setRej] = useState(null)
   const [verify, setVerify] = useState(null)
+  const [busy, setBusy] = useState(false)
 
   const src = tab === 'PENDING' ? pending : all
   const rows = (tab === 'PENDING' ? pending.data?.payments : all.data?.payments) || []
   const reload = () => { pending.reload(); all.reload() }
-  const act = async (fn, ok) => { try { await fn(); toast.success(ok); reload() } catch (e) { toast.error(errMsg(e)) } }
+  const act = async (fn, ok) => {
+    if (busy) return
+    setBusy(true)
+    try { await fn(); toast.success(ok); reload() } catch (e) { toast.error(errMsg(e)) } finally { setBusy(false) }
+  }
 
   return (
     <>
@@ -36,9 +41,9 @@ export default function Payments() {
               <td className="td"><Badge status={p.status} /></td><td className="td whitespace-nowrap">{dtLabel(p.verified_at)}</td><td className="td">{p.verified_by || '—'}</td>
               <td className="td whitespace-nowrap">
                 {p.status === 'PENDING' && p.booking_status === 'PAYMENT_SUBMITTED' && <div className="flex gap-1.5">
-                  <button className="btn-success btn-sm" onClick={() => setVerify(p)}><Check className="h-3.5 w-3.5" />Verify</button>
-                  <button className="btn-danger btn-sm" onClick={() => setRej(p)}><X className="h-3.5 w-3.5" />Reject</button></div>}
-                {p.status === 'VERIFIED' && ['CANCELLED', 'NO_SHOW'].includes(p.booking_status) && <button className="btn-secondary btn-sm" onClick={() => act(() => api.patch(`/payments/${p.id}/refund`), 'Marked as refunded')}><RotateCcw className="h-3.5 w-3.5" />Mark refunded</button>}
+                  <button className="btn-success btn-sm" disabled={busy} onClick={() => setVerify(p)}><Check className="h-3.5 w-3.5" />Verify</button>
+                  <button className="btn-danger btn-sm" disabled={busy} onClick={() => setRej(p)}><X className="h-3.5 w-3.5" />Reject</button></div>}
+                {p.status === 'VERIFIED' && ['CANCELLED', 'NO_SHOW'].includes(p.booking_status) && <button className="btn-secondary btn-sm" disabled={busy} onClick={() => act(() => api.patch(`/payments/${p.id}/refund`), 'Marked as refunded')}><RotateCcw className="h-3.5 w-3.5" />Mark refunded</button>}
               </td>
             </tr>))}
         </Table>
