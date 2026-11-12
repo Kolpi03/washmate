@@ -1,6 +1,7 @@
 import re
 
 from flask import Blueprint, current_app, jsonify, request
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from flask_jwt_extended import create_access_token, set_access_cookies, unset_jwt_cookies
 
 from app.extensions import db
@@ -81,11 +82,39 @@ def login():
         raise ApiError("Invalid credentials", 401)
     if portal in ("STUDENT", "OPERATOR") and u.role != portal:
         raise ApiError("Invalid credentials for this portal", 401)
-    if u.role == "OPERATOR" and u.email.lower() not in current_app.config.get("OPERATOR_EMAILS", set()):
-        raise ApiError("Invalid credentials", 401)  # operator removed from backend/operators.txt
     resp = jsonify({"user": u.to_dict()})
     set_access_cookies(resp, create_access_token(identity=str(u.id)))
     return resp
+
+
+SETPW_SALT, SETPW_MAX_AGE = "operator-set-password", 48 * 3600
+
+
+def make_setpw_token(user):
+    """Single-use (bound to the current password hash), 48-hour link token for an operator."""
+    return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt=SETPW_SALT).dumps(
+        {"u": user.id, "h": user.password_hash[-16:]})
+
+
+@bp.post("/set-password")
+def set_password_with_token():
+    d = json_body()
+    try:
+        data = URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt=SETPW_SALT).loads(
+            str(d.get("token", "")), max_age=SETPW_MAX_AGE)
+    except SignatureExpired:
+        raise ApiError("This link has expired. Ask the owner to send a new invitation.", 400)
+    except BadSignature:
+        raise ApiError("This link is invalid or has already been used.", 400)
+    u = db.session.get(User, data.get("u"))
+    if not u or u.role != "OPERATOR" or u.password_hash[-16:] != data.get("h"):
+        raise ApiError("This link is invalid or has already been used.", 400)
+    pw = str(d.get("password", ""))
+    check_password_policy(pw, u.email, u.name)
+    u.set_password(pw)
+    audit(u, "OPERATOR_PASSWORD_SET", "user", u.id, f"ip:{security.client_ip()}")
+    db.session.commit()
+    return jsonify({"message": "Password set. You can now sign in.", "email": u.email})
 
 
 @bp.post("/logout")

@@ -2,6 +2,7 @@
 
   python backend/manage.py init-db                       create missing tables + default settings/modes/machines
   python backend/manage.py create-operator --email E     create/reset the operator (password prompted or OPERATOR_PASSWORD)
+  python backend/manage.py invite-operators              email every address in operators.txt a set-your-password link
   python backend/manage.py seed-demo                     add a demo student (local/demo use only)
 """
 import argparse
@@ -49,6 +50,34 @@ def create_operator(email, password, name="Hostel Operator"):
     db.session.commit()
 
 
+def invite_operators(only=None, resend=False):
+    """Create (password-less) operator accounts for emails in operators.txt and email each a one-time link."""
+    import secrets
+    from app.routes.auth import make_setpw_token
+    from app.utils.mailer import send_mail
+    base = os.environ.get("FRONTEND_URL", "").rstrip("/")
+    if not base.startswith("http"):
+        sys.exit("Set FRONTEND_URL (e.g. https://washmate-mu.vercel.app) so the email link points at the live app")
+    for email in sorted(load_operator_emails()):
+        if only and email != only.lower():
+            continue
+        u = User.query.filter_by(email=email).first()
+        if u and u.role != "OPERATOR":
+            print("skip (student account):", email); continue
+        if u and not resend:
+            print("skip (already invited; use --resend):", email); continue
+        if not u:
+            u = User(email=email, name="Hostel Operator", role="OPERATOR", hostel="Laundry")
+            u.set_password(secrets.token_urlsafe(24))  # unusable until the invitee sets their own
+            db.session.add(u)
+            db.session.commit()
+        link = f"{base}/operator/set-password?token={make_setpw_token(u)}"
+        send_mail(email, "WashMate: set your operator password",
+                  "You have been added as a WashMate operator.\n\nSet your password here (valid 48 hours, one use):\n"
+                  f"{link}\n\nThen sign in at {base}/operator/login with this email.\n")
+        print("invited:", email)
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -56,6 +85,9 @@ def main():
     op = sub.add_parser("create-operator")
     op.add_argument("--email", default=os.environ.get("OPERATOR_EMAIL"))
     op.add_argument("--name", default="Hostel Operator")
+    iv = sub.add_parser("invite-operators")
+    iv.add_argument("--email", default=None)
+    iv.add_argument("--resend", action="store_true")
     dm = sub.add_parser("seed-demo")
     dm.add_argument("--email", default="demo.student@washmate.test")
     dm.add_argument("--password", default="DemoStudent#2026")
@@ -71,6 +103,8 @@ def main():
                 sys.exit("Password too short")
             create_operator(a.email, pw, a.name)
             print("Operator ready:", a.email)
+        elif a.cmd == "invite-operators":
+            invite_operators(a.email, a.resend)
         elif a.cmd == "seed-demo":
             if not User.query.filter_by(email=a.email).first():
                 u = User(name="Demo Student", roll_number="DEMO001", email=a.email, role="STUDENT", hostel="Hall Demo")

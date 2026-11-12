@@ -1,6 +1,5 @@
 from functools import wraps
 
-from flask import current_app
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 
 from app.extensions import db
@@ -13,8 +12,6 @@ def current_user() -> User:
     user = db.session.get(User, int(get_jwt_identity()))
     if not user:
         raise ApiError("Account no longer exists", 401)
-    if user.role == "OPERATOR" and user.email.lower() not in current_app.config.get("OPERATOR_EMAILS", set()):
-        raise ApiError("This account is not on the operator allowlist (backend/operators.txt)", 403)
     return user
 
 

@@ -5,6 +5,7 @@ import Shell from './layouts/Shell'
 import Landing from './pages/auth/Landing'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
+import SetPassword from './pages/auth/SetPassword'
 import StudentDashboard from './pages/student/Dashboard'
 import BookWash from './pages/student/BookWash'
 import Payment from './pages/student/Payment'
@@ -41,6 +42,7 @@ export default function App() {
       <Route path="/" element={<Public><Landing /></Public>} />
       <Route path="/login" element={<Public><Login portal="STUDENT" /></Public>} />
       <Route path="/register" element={<Public><Register /></Public>} />
+      <Route path="/operator/set-password" element={<SetPassword />} />
       <Route path="/operator/login" element={<Public><Login portal="OPERATOR" /></Public>} />
 
       <Route path="/student" element={<Guard role="STUDENT"><Shell role="STUDENT" /></Guard>}>
