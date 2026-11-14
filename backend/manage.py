@@ -43,7 +43,9 @@ def create_operator(email, password, name="Hostel Operator"):
     if email.lower() not in load_operator_emails():
         sys.exit(f"{email} is not in backend/operators.txt - only the app owner can authorise operators by adding the email there.")
     u = User.query.filter_by(email=email.lower()).first()
-    if u and u.role != "OPERATOR":
+    if u and u.role == ROLE_REVOKED:
+        sys.exit("That operator was revoked. Re-add them to operators.txt and run invite-operators to reinstate.")
+    if u and u.role != ROLE_OPERATOR:
         sys.exit("That email belongs to a student account.")
     if not u:
         u = User(email=email.lower(), name=name, role="OPERATOR", hostel="Laundry")
