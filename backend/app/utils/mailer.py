@@ -15,7 +15,13 @@ def send_mail(to, subject, body):
     msg["Subject"] = subject
     msg.set_content(body)
     host, port = os.environ.get("SMTP_HOST", "smtp.gmail.com"), int(os.environ.get("SMTP_PORT", "587"))
+    ctx = ssl.create_default_context()
+    if port == 465:  # implicit TLS (works on networks that break STARTTLS on 587)
+        with smtplib.SMTP_SSL(host, port, timeout=20, context=ctx) as s:
+            s.login(user, pw)
+            s.send_message(msg)
+        return
     with smtplib.SMTP(host, port, timeout=20) as s:
-        s.starttls(context=ssl.create_default_context())
+        s.starttls(context=ctx)
         s.login(user, pw)
         s.send_message(msg)

@@ -55,6 +55,10 @@ def invite_operators(only=None, resend=False):
     import secrets
     from app.routes.auth import make_setpw_token
     from app.utils.mailer import send_mail
+    sk = os.environ.get("SECRET_KEY", "")
+    if not sk or sk.startswith("[SENSITIVE") or sk == "dev-secret-change-me":
+        sys.exit("SECRET_KEY is missing or a placeholder (e.g. '[SENSITIVE]' from `vercel env pull`). "
+                 "Export the real production SECRET_KEY, or links will be rejected by the live app.")
     base = os.environ.get("FRONTEND_URL", "").rstrip("/")
     if not base.startswith("http"):
         sys.exit("Set FRONTEND_URL (e.g. https://washmate-mu.vercel.app) so the email link points at the live app")
