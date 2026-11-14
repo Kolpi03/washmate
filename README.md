@@ -102,14 +102,50 @@ npm --prefix frontend run build       # production build -> frontend/dist
 ```
 
 ## 11. Operator account creation
-Public operator registration does not exist. Create the first operator from the terminal:
+Public operator registration does not exist. Only emails the owner lists in `backend/operators.txt` (an allowlist read only on the
+owner's machine; it is never needed on Vercel) can hold the operator role. Keep real operator emails out of the public repo:
+```bash
+git update-index --skip-worktree backend/operators.txt   # local edits to the allowlist are never committed
+```
+
+### Invite operators by email (production)
+The owner runs this from their own machine against the production database. Each listed operator gets a one-time link
+(valid 48 hours) to `/operator/set-password`, chooses their own password, then signs in at `/operator/login`.
+
+1. **Gmail app password** for the sending account: turn on 2-Step Verification at <https://myaccount.google.com/security>, then
+   create an app password named `washmate` at <https://myaccount.google.com/apppasswords>.
+2. **Add the emails** to `backend/operators.txt`, one per line.
+3. **Send the invites** from the project root (the password prompt is hidden and never written to shell history):
+   ```bash
+   set -a; source .tmp/prod.env; set +a                # DATABASE_URL from `vercel env pull`
+   export SECRET_KEY="$(cat ~/.washmate_secret_key)"   # the real production SECRET_KEY (see note below)
+   export FRONTEND_URL=https://washmate-mu.vercel.app
+   export SMTP_USER=you@gmail.com SMTP_PORT=465
+   read -s -p "App password: " SMTP_PASSWORD; export SMTP_PASSWORD; echo
+   python backend/manage.py invite-operators            # new addresses only
+   python backend/manage.py invite-operators --resend   # also re-send to existing operators (e.g. expired link)
+   python backend/manage.py invite-operators --email someone@example.com   # just one address
+   unset SMTP_PASSWORD SECRET_KEY
+   ```
+   Expected output: `invited: <email>` per operator (`skip (already invited; use --resend)` for existing ones).
+
+**Troubleshooting**
+| Symptom | Cause / fix |
+|---|---|
+| Link says *"invalid or has already been used"* (but it is fresh) | The invite was signed with a different `SECRET_KEY` than production. `vercel env pull` writes sensitive variables as the literal `[SENSITIVE]` (the command now refuses to run with it). Vercel cannot show the old value, so set a new one on both sides: `python3 -c "import secrets;print(secrets.token_urlsafe(48), end='')" > ~/.washmate_secret_key`, `vercel env rm SECRET_KEY production --yes`, `vercel env add SECRET_KEY production < ~/.washmate_secret_key`, then redeploy. Logins are unaffected (they use `JWT_SECRET_KEY`). |
+| Command hangs at `db.create_all()` / connecting | The network blocks PostgreSQL port 5432 (common on campus Wi-Fi). Use a mobile hotspot. |
+| `SMTPServerDisconnected: Connection unexpectedly closed` | The network breaks STARTTLS on port 587. Use `SMTP_PORT=465` (implicit TLS). |
+| `SMTPAuthenticationError` | Wrong app password. Re-enter it at the hidden prompt. |
+| `ModuleNotFoundError` | Run with the project virtualenv after `pip install -r requirements.txt`. |
+
+### Create an operator directly (local development)
 ```bash
 source .venv/bin/activate
-# the email must first be listed in backend/operators.txt (owner-only allowlist)
 python backend/manage.py create-operator --email operator@yourhostel.example    # prompts for the password
 # or non-interactive: OPERATOR_PASSWORD='…' python backend/manage.py create-operator --email …
 ```
-Then sign in at `/operator/login` and set your **UPI ID**, hours and policies under *Settings*, and your real prices under *Wash Modes*.
+
+After the first sign-in, set your **UPI ID**, hours and policies under *Settings*, and your real prices under *Wash Modes*.
 (Initial modes/prices/durations/water values are **illustrative only**.)
 
 ## 12. Student registration
@@ -179,9 +215,10 @@ Environment variables (Vercel → Project → Settings → Environment Variables
 One-time schema setup (never run per request; never drops data):
 ```bash
 DATABASE_URL='postgresql://…' python backend/manage.py init-db
-DATABASE_URL='postgresql://…' OPERATOR_PASSWORD='…' python backend/manage.py create-operator --email you@example.com
 vercel --prod
 ```
+Then invite operators by email as described in [Operator account](#11-operator-account-creation). SMTP settings are only needed on
+the owner's machine, not on Vercel.
 
 ## 20. Live application URL
 **https://washmate-mu.vercel.app** (student: `/login`, operator: `/operator/login`). Details in [Deployment status](#deployment-status).
@@ -213,5 +250,5 @@ Requires `ffmpeg`/`ffprobe`. Run before 23:30 local server time.
 | Verified on production (11 Nov 2026) | frontend + SPA routes, student register/login, operator login, role checks (403/404/redirects), wash modes, availability, booking, UPI reference submission, duplicate-reference rejection (409), operator verification → `WM-YYYY-NNN`, machine maintenance (capacity drop) & restore, rescheduling request + approval with history, notifications, reports (daily/weekly/monthly + CSV), cron endpoint auth (401 without/with wrong token, 200 with secret), data persisted across serverless invocations, no browser console errors |
 | Not verifiable live | the exact 15-minute reminder timing (production hours were closed at test time) – covered by the backend tests and the local demo |
 | Test data | all smoke-test records were removed from the production database after verification |
-The production operator password was generated randomly and stored only in a git-ignored local file; change it after first login if you wish
-(`python backend/manage.py create-operator --email … ` with `DATABASE_URL` set resets it).
+Operators set their own passwords through the email invite (verified on production, 15 Nov 2026); no operator password is stored
+by the owner. To give someone a fresh link, run `invite-operators --resend --email …`.
