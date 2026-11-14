@@ -3,7 +3,7 @@ from functools import wraps
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 
 from app.extensions import db
-from app.models import AuditLog, User
+from app.models import ACTIVE_ROLES, AuditLog, User
 from app.utils.common import ApiError
 
 
@@ -12,6 +12,8 @@ def current_user() -> User:
     user = db.session.get(User, int(get_jwt_identity()))
     if not user:
         raise ApiError("Account no longer exists", 401)
+    if user.role not in ACTIVE_ROLES:  # e.g. a revoked operator: existing sessions stop working immediately
+        raise ApiError("This account has been disabled", 401)
     return user
 
 

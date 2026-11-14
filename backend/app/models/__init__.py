@@ -6,6 +6,8 @@ from app.extensions import db
 
 # ---- enumerations (stored as strings) -------------------------------------------------
 ROLE_STUDENT, ROLE_OPERATOR = "STUDENT", "OPERATOR"
+ROLE_REVOKED = "REVOKED"  # former operator; kept (not deleted) so payment/audit history stays linked
+ACTIVE_ROLES = (ROLE_STUDENT, ROLE_OPERATOR)
 MACHINE_STATUSES = ("AVAILABLE", "OCCUPIED", "MAINTENANCE", "INACTIVE")
 WORKING_MACHINE = ("AVAILABLE", "OCCUPIED")
 PAYMENT_STATUSES = ("PENDING", "VERIFIED", "REJECTED", "REFUNDED")

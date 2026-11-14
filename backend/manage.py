@@ -3,6 +3,7 @@
   python backend/manage.py init-db                       create missing tables + default settings/modes/machines
   python backend/manage.py create-operator --email E     create/reset the operator (password prompted or OPERATOR_PASSWORD)
   python backend/manage.py invite-operators              email every address in operators.txt a set-your-password link
+  python backend/manage.py revoke-operator --email E     disable an operator (history kept) and remove them from operators.txt
   python backend/manage.py seed-demo                     add a demo student (local/demo use only)
 """
 import argparse
@@ -14,8 +15,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import create_app  # noqa: E402
 from app.extensions import db  # noqa: E402
-from config import load_operator_emails  # noqa: E402
-from app.models import Machine, User, WashMode  # noqa: E402
+from config import BASE_DIR, load_operator_emails  # noqa: E402
+from app.models import ROLE_OPERATOR, ROLE_REVOKED, ROLE_STUDENT, Machine, User, WashMode  # noqa: E402
+from app.utils.auth import audit  # noqa: E402
 
 # Clearly ILLUSTRATIVE starting values – the operator edits these in the portal.
 DEFAULT_MODES = [
@@ -66,12 +68,18 @@ def invite_operators(only=None, resend=False):
         if only and email != only.lower():
             continue
         u = User.query.filter_by(email=email).first()
-        if u and u.role != "OPERATOR":
+        if u and u.role == ROLE_STUDENT:
             print("skip (student account):", email); continue
-        if u and not resend:
+        if u and u.role == ROLE_REVOKED:  # the owner re-added a revoked operator to operators.txt
+            u.role = ROLE_OPERATOR
+            u.set_password(secrets.token_urlsafe(24))
+            audit(None, "OPERATOR_REINSTATED", "user", u.id, "via manage.py invite-operators")
+            db.session.commit()
+            print("reinstated:", email)
+        elif u and not resend:
             print("skip (already invited; use --resend):", email); continue
         if not u:
-            u = User(email=email, name="Hostel Operator", role="OPERATOR", hostel="Laundry")
+            u = User(email=email, name="Hostel Operator", role=ROLE_OPERATOR, hostel="Laundry")
             u.set_password(secrets.token_urlsafe(24))  # unusable until the invitee sets their own
             db.session.add(u)
             db.session.commit()
@@ -80,6 +88,49 @@ def invite_operators(only=None, resend=False):
                   "You have been added as a WashMate operator.\n\nSet your password here (valid 48 hours, one use):\n"
                   f"{link}\n\nThen sign in at {base}/operator/login with this email.\n")
         print("invited:", email)
+
+
+def _operators_file():
+    from pathlib import Path
+    return Path(os.environ.get("OPERATORS_FILE") or BASE_DIR / "operators.txt")
+
+
+def remove_from_allowlist(email):
+    """Drop `email` from operators.txt, keeping comments and other lines. Returns True if a line was removed."""
+    path = _operators_file()
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    except OSError:
+        return False
+    kept = [l for l in lines if l.split("#")[0].strip().lower() != email]
+    if len(kept) != len(lines):
+        path.write_text("".join(kept), encoding="utf-8")
+        return True
+    return False
+
+
+def revoke_operator(email, force=False):
+    """Disable an operator account. The row is kept so payment/booking/audit history stays linked."""
+    import secrets
+    email = email.strip().lower()
+    u = User.query.filter_by(email=email).first()
+    if not u:
+        sys.exit(f"No account with email {email}.")
+    if u.role == ROLE_STUDENT:
+        sys.exit(f"{email} is a student account, not an operator.")
+    if u.role == ROLE_REVOKED:
+        print("already revoked:", email)
+    else:
+        others = User.query.filter(User.role == ROLE_OPERATOR, User.id != u.id).count()
+        if others == 0 and not force:
+            sys.exit(f"{email} is the only operator; nobody could verify payments afterwards. Re-run with --force to revoke anyway.")
+        u.role = ROLE_REVOKED
+        u.set_password(secrets.token_urlsafe(32))  # also voids any outstanding set-password link
+        audit(None, "OPERATOR_REVOKED", "user", u.id, "via manage.py revoke-operator")
+        db.session.commit()
+        print("revoked:", email, "(signed out everywhere; history kept)")
+    if remove_from_allowlist(email):
+        print("removed from", _operators_file().name)
 
 
 def main():
@@ -92,6 +143,9 @@ def main():
     iv = sub.add_parser("invite-operators")
     iv.add_argument("--email", default=None)
     iv.add_argument("--resend", action="store_true")
+    rv = sub.add_parser("revoke-operator")
+    rv.add_argument("--email", required=True)
+    rv.add_argument("--force", action="store_true", help="allow revoking the last remaining operator")
     dm = sub.add_parser("seed-demo")
     dm.add_argument("--email", default="demo.student@washmate.test")
     dm.add_argument("--password", default="DemoStudent#2026")
@@ -109,6 +163,8 @@ def main():
             print("Operator ready:", a.email)
         elif a.cmd == "invite-operators":
             invite_operators(a.email, a.resend)
+        elif a.cmd == "revoke-operator":
+            revoke_operator(a.email, a.force)
         elif a.cmd == "seed-demo":
             if not User.query.filter_by(email=a.email).first():
                 u = User(name="Demo Student", roll_number="DEMO001", email=a.email, role="STUDENT", hostel="Hall Demo")

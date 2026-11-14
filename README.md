@@ -138,6 +138,17 @@ The owner runs this from their own machine against the production database. Each
 | `SMTPAuthenticationError` | Wrong app password. Re-enter it at the hidden prompt. |
 | `ModuleNotFoundError` | Run with the project virtualenv after `pip install -r requirements.txt`. |
 
+### Revoke an operator
+Run with the same `DATABASE_URL` as above (no SMTP or `SECRET_KEY` needed):
+```bash
+python backend/manage.py revoke-operator --email someone@example.com
+```
+The account is disabled immediately: any open session stops working, login is refused and any unused invite link is voided.
+The account is **kept, not deleted**, so the payments it verified and the audit log stay intact. The email is also removed from
+`backend/operators.txt`. The command refuses to revoke the last remaining operator unless you add `--force`.
+To give access back, add the email to `operators.txt` again and run `invite-operators --email …`: the account is reinstated
+and a new set-password link is sent.
+
 ### Create an operator directly (local development)
 ```bash
 source .venv/bin/activate

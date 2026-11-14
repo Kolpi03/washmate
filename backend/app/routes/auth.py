@@ -5,7 +5,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from flask_jwt_extended import create_access_token, set_access_cookies, unset_jwt_cookies
 
 from app.extensions import db
-from app.models import User
+from app.models import ACTIVE_ROLES, User
 from app.utils.auth import audit, login_required
 from app.utils.common import ApiError, json_body
 from app.utils import security
@@ -77,7 +77,7 @@ def login():
     else:
         check_password_hash(_DUMMY_HASH, pw)
         good = False
-    if not good:
+    if not good or u.role not in ACTIVE_ROLES:
         security.record_login_failure(ident)
         raise ApiError("Invalid credentials", 401)
     if portal in ("STUDENT", "OPERATOR") and u.role != portal:
